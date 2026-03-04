@@ -20,9 +20,7 @@ class SpiceImporter:
         kernels = {
             'lsk': 'lsk/naif0012.tls',                          # Leap seconds (hate this)
             'pck': 'pck/gm_de440.tpc',                          # Planetary constants
-            'pck_earth': 'pck/earth_latest_high_prec.bpc',      # Earth orientation
             'spk': 'spk/planets/de440.bsp',                     # DE440 (planet and moon) ephemeris (2020-2030)
-            'moon_pa': 'pck/moon_pa_de440_200625.bpc',          # Moon orientation
         }
 
         print("Downloading SPICE kernels...")

@@ -1,6 +1,8 @@
 import numpy as np
-
 from Constants import G
+
+print("PlanetaryData:Make sure to update position of bodies with position at specific time")
+print("e.g. Earth.position = [1,2,3]")
 class Body:
     def __init__(self, name: str, mass: float, mu: float, radius: float, position: float = None):
         self.name = name
@@ -21,7 +23,6 @@ Earth = Body(
     mass = 5.972e24, # kg
     mu = 5.972e24*G, # km3/s2
     radius = 6378.0, # km
-    position = np.zeros(3)
 )
 
 Luna = Body(
@@ -29,5 +30,4 @@ Luna = Body(
     mass = 7.34767309e22, # kg
     mu = 7.34767309e22*G, # km3/s2
     radius = 1737.1, # km
-    position = np.zeros(3)
 )

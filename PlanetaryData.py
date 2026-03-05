@@ -1,4 +1,4 @@
-import numpy as np
+# import numpy as np
 from Constants import G
 
 print("PlanetaryData:Make sure to update position of bodies with position at specific time")

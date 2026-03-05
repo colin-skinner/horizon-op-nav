@@ -51,9 +51,8 @@ class ChristianRobinson:
         # T_c_p = inv(T_p_c)
 
         # Step 10
-        # r_prime = (n.T @ n - 1)**(-1/2) * n
         r_prime = n / np.sqrt(np.dot(n, n) - 1)
-        # r_prime = n / norm(n)
+
         # Step 11
         r_c = T_c_p @ D_inv @ r_prime
 

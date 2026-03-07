@@ -668,18 +668,15 @@ if __name__ == "__main__":
 		width=1280,
 		height=720,
 		horizontal_fov_deg=60.0,  # Or provide k_matrix=np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]]).
-		position_world=np.array([0.0, 0.0, 4_000.0]),
+		position_world=np.array([0.0, 0.0, 4_000_000.0]),
 		forward_world=np.array([0.0, 0.0, -1.0]),
 		up_world=np.array([0.0, 1.0, 0.0]),
 	)
 
 	moon_like = CelestialBody(
 		center_world=np.array([0.0, 0.0, 0.0]),
-		radius=1_737.4,
-		albedo_rgb=(185, 185, 180),
-	)
 
-	result = render_celestial_body(
+		radius=1_737.4,
 		camera=camera,
 		body=moon_like,
 		background_rgb=(8, 10, 18),

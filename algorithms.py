@@ -17,7 +17,7 @@ class ChristianRobinson:
         """
         Parameters:
             u: set of measurements (Nx3) e.g. [[0,0,0], [1,1,1]]
-            T_p_c: Transformation matrix from celestial (C) to camera (P)
+            T_p_c: Rotation matrix from celestial (C) to camera (P)
         """
         N = len(u)
         a,b,c = self.a, self.b, self.c
@@ -39,18 +39,19 @@ class ChristianRobinson:
 
         # Step 7
         assert xs.shape == (N,3)
-        H = xs # Already in this form I guess
+        H = s # Already in this form I guess
 
         # Step 8
         one_arr = np.ones((N, 1))
         n = lstsq(H, one_arr)[0] # Could extract other metrics maybe?
-        # n = n.reshape((N,1))
+        n = n.flatten()
 
         # Step 9
         T_c_p = T_p_c.T
+        # T_c_p = inv(T_p_c)
 
         # Step 10
-        r_prime = (n.T @ n - 1)**(-1/2) * n
+        r_prime = n / np.sqrt(np.dot(n, n) - 1)
 
         # Step 11
         r_c = T_c_p @ D_inv @ r_prime

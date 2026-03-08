@@ -9,3 +9,27 @@ RAD_TO_DEG = 180/np.pi
 DEG_TO_RAD = 1 / RAD_TO_DEG
 ARCSEC_TO_RAD = DEG_TO_RAD / 3600
 RAD_TO_ARCSEC = 1 / ARCSEC_TO_RAD
+
+Sun = {
+    "name": "Sun",
+    "mass": 1.989e30,       # kg
+    "mu": 1.989e30 * G,     # km^3/s^2
+    "radius": 695510.0,     # km
+    "position": None,
+}
+
+Earth = {
+    "name": "Earth",
+    "mass": 5.972e24,       # kg
+    "mu": 5.972e24 * G,     # km^3/s^2
+    "radius": 6378.0,       # km
+    "position": None,
+}
+
+Luna = {
+    "name": "Moon",
+    "mass": 7.34767309e22,  # kg
+    "mu": 7.34767309e22 * G,# km^3/s^2
+    "radius": 1737.1,       # km
+    "position": None,
+}

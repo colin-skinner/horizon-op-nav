@@ -6,10 +6,8 @@ from time import time as time
 # import spiceypy as spice
 from numpy.linalg import norm
 
-from PlanetaryData import Body
-
 class OrbitPropagator:
-    def __init__(self, state0: np.ndarray | list, t_final: float, dt: float, bodies: list[Body]):
+    def __init__(self, state0: np.ndarray | list, t_final: float, dt: float, bodies: list[dict]):
         """
         - State in km, km/s.
         - t_final in seconds
@@ -71,8 +69,8 @@ class OrbitPropagator:
 
         # Grav accel
         for body in self.bodies:
-            r_body = r - body.position # Relative position
-            a = -r_body*body.mu/norm(r_body)**3 # 3D vector with [km/s^2]
+            r_body = r - body["position"] # Relative position
+            a = -r_body*body["mu"]/norm(r_body)**3 # 3D vector with [km/s^2]
 
         # SRP?
 

@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.linalg import norm, inv, lstsq
 
+
 class ChristianRobinson:
 
     def __init__(self, K_inv: np.ndarray, a: float, b: float, c: float):

@@ -149,7 +149,6 @@ class SatEKF(EKFBase):
         """Jacobian of the State Transition Function"""
 
         r = mu[0:3]
-        v = mu[0:3]
         dt = self.dt
         mu_cb = self.mu_cb  # central body mu
 
@@ -164,10 +163,12 @@ class SatEKF(EKFBase):
         return F
 
 
-    def g_func(self, mu: np.ndarray, meas: np.ndarray) -> np.ndarray: # So simple
+    def g_func(self, mu: np.ndarray, meas: np.ndarray, T_p_c: np.ndarray) -> np.ndarray: # So simple
         """Measurement Function"""
-        return meas
+        return T_p_c @ mu[0:3]
 
-    def g_jac(self, mu: np.ndarray, meas: np.ndarray) -> np.ndarray: # So simple
+    def g_jac(self, mu: np.ndarray, meas: np.ndarray, T_p_c: np.ndarray) -> np.ndarray: # So simple
         """Jacobian of the Measurement Function"""
-        return np.eye(3)
+        H = np.zeros((3,6))
+        H[:,0:3] = T_p_c
+        return H

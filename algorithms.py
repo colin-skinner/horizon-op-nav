@@ -18,6 +18,8 @@ class ChristianRobinson:
         Parameters:
             u: set of measurements (Nx3) e.g. [[0,0,0], [1,1,1]]
             T_p_c: Rotation matrix from celestial (C) to camera (P)
+        Returns:
+            r_c: Vector from CAMERA TO PLANET in CAMERA FRAME
         """
         N = len(u)
         a,b,c = self.a, self.b, self.c

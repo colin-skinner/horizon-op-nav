@@ -10,6 +10,11 @@ DEG_TO_RAD = 1 / RAD_TO_DEG
 ARCSEC_TO_RAD = DEG_TO_RAD / 3600
 RAD_TO_ARCSEC = 1 / ARCSEC_TO_RAD
 
+
+print("PlanetaryData: Make sure to update position of bodies with position at specific time")
+print('e.g. `Earth["position"] = [1.0, 2.0, 3.0]  # km`')
+
+
 Sun = {
     "name": "Sun",
     "mass": 1.989e30,       # kg

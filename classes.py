@@ -77,9 +77,9 @@ class Body:
     ):
         """
         Args:
-            a (float): Ellipsoid parameter [m]
-            b (float): Ellipsoid parameter [m]
-            c (float): Ellipsoid parameter [m]
+            a (float): Ellipsoid parameter [km]
+            b (float): Ellipsoid parameter [km]
+            c (float): Ellipsoid parameter [km]
         """
         self.a = a
         self.b = b
@@ -87,22 +87,19 @@ class Body:
 
     def __str__(self):
         s = "Worldview:\n"
-        s += f" - Ellipsoid semi-axes a,b,c = [{self.a}, {self.b}, {self.c}] m\n"
+        s += f" - Ellipsoid semi-axes a,b,c = [{self.a}, {self.b}, {self.c}] km\n"
         return s
     
 class Pose:
     def __init__(self,
         r_truth: np.ndarray,
-#         a: float,
-#         b: float,
-#         c: float,
         T_p_c: np.ndarray
     ):
             
         """
 
         Args:
-            r_truth (np.ndarray): Position relative to central body [m]
+            r_truth (np.ndarray): Position relative to central body [km]
             T_p_c (np.ndarray(3,3)): Passive rotation from PLANET to CAMERA 
         """
         self.r_truth = r_truth
@@ -110,8 +107,8 @@ class Pose:
 
     def __str__(self):
         s = "Pose:\n"
-        s += f" - Spacecraft position (r_truth) = {self.r_truth} m\n"
-        s += f" - Absolute position norm = {norm(self.r_truth):.2f} m\n"
+        s += f" - Spacecraft position (r_truth) = {self.r_truth} km\n"
+        s += f" - Absolute position norm = {norm(self.r_truth):.2f} km\n"
         return s
     
 class PlanetImage:

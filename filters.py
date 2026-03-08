@@ -62,77 +62,23 @@ class ChristianRobinson:
 
         return r_c
 
-class EKFBase:
-    """
-    Base class for the Extended Kalman Filter (from HW solutions haha)
-    """
-    def __init__(self, Q: np.ndarray, R: np.ndarray,
-                 mu0: np.ndarray, sigma0: np.ndarray):
-        """Initialize the EKF with the system matrices"""
-        self.Q = np.array(Q)
-        self.R = np.array(R)
-
-        self.mu = mu0
-        self.sigma = sigma0
-
-    def f_func(self, mu: np.ndarray, u: np.ndarray) -> np.ndarray:
-        raise NotImplementedError
-
-    def f_jac(self, mu: np.ndarray, u: np.ndarray) -> np.ndarray:
-        raise NotImplementedError
-
-    def g_func(self, mu: np.ndarray, meas: np.ndarray) -> np.ndarray:
-        raise NotImplementedError
-
-    def g_jac(self, mu: np.ndarray, meas: np.ndarray) -> np.ndarray:
-        raise NotImplementedError
-
-    def predict(self, u: np.ndarray = None) -> tuple[np.ndarray, np.ndarray]:
-        """EKF Predict Step"""
-
-        # Predict the next state (t|t-1) from the current state (t-1|t-1)
-        self.mu = self.f_func(self.mu, u)
-
-        # Predict the next covariance
-        a_mat = self.f_jac(self.mu, u)
-        self.sigma = a_mat @ self.sigma @ a_mat.T + self.Q
-
-        return self.mu, self.sigma
-
-    def update(self, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """EKF Update Step"""
-        # Calculate the Kalman Gain
-        c_mat = self.g_jac(self.mu, y)
-        s_mat = c_mat @ self.sigma @ c_mat.T + self.R
-        k_mat = self.sigma @ c_mat.T @ np.linalg.inv(s_mat)
-
-        # Update the state estimate (t|t) from the predicted state (t|t-1)
-        self.mu += k_mat @ (y - self.g_func(self.mu, y))
-        # Update the covariance
-        self.sigma = (np.eye(self.sigma.shape[0]) - k_mat @ c_mat) @ self.sigma
-
-        return self.mu, self.sigma
-
-    def step(self, u, y) -> tuple[np.ndarray, np.ndarray]:
-        """EKF Step"""
-        self.predict(u)
-        self.update(y)
-
-        return self.mu, self.sigma
-    
-
-class SatEKF(EKFBase):
+class SatEKF():
     """Child class for the Satellite EKF"""
     def __init__(self, Q: np.ndarray, R: np.ndarray, dt: float,
                  mu0: np.ndarray, sigma0: np.ndarray, central_body_mass: np.ndarray):
         """
         Initialize the EKF with the system matrices
         """
-        super().__init__(Q, R, mu0, sigma0)
+        self.Q = np.array(Q)
+        self.R = np.array(R)
+
+        self.mu = mu0
+        self.sigma = sigma0
+
         self.dt = dt
         self.mu_cb = G * central_body_mass
 
-    def f_func(self, mu: np.ndarray, u: np.ndarray) -> np.ndarray:
+    def f_func(self, mu: np.ndarray, u: np.ndarray = None) -> np.ndarray:
         """State Transition Function"""
         
         r = mu[0:3]
@@ -145,16 +91,15 @@ class SatEKF(EKFBase):
 
         return np.array([*r_new, *v_new])
 
-    def f_jac(self, mu: np.ndarray, u: np.ndarray) -> np.ndarray:
+    def f_jac(self, mu: np.ndarray, u: np.ndarray = None) -> np.ndarray:
         """Jacobian of the State Transition Function"""
 
         r = mu[0:3]
-        v = mu[0:3]
         dt = self.dt
         mu_cb = self.mu_cb  # central body mu
 
         # a = -r*mu_cb/norm(r)**3
-        dvdr = -mu_cb * (np.eye(3) / norm(r)**3 - 3 * np.outer(r, r) / norm(r)**5)
+        dvdr = -mu_cb * (np.eye(3) / norm(r)**3 - 3 * np.outer(r, r) / norm(r)**5) # hand calcs for this
         
         F = np.eye(6)
         F[0:3, 3:6] = dt * np.eye(3)              # dr/dv
@@ -164,10 +109,131 @@ class SatEKF(EKFBase):
         return F
 
 
-    def g_func(self, mu: np.ndarray, meas: np.ndarray) -> np.ndarray: # So simple
-        """Measurement Function"""
-        return meas
+    def g_func(self, mu: np.ndarray, r_c: np.ndarray, T_p_c: np.ndarray) -> np.ndarray: # So simple
+        """Measurement function
 
-    def g_jac(self, mu: np.ndarray, meas: np.ndarray) -> np.ndarray: # So simple
-        """Jacobian of the Measurement Function"""
-        return np.eye(3)
+        Args:
+            mu (np.ndarray): [x,y,z,vx,vy,vz]
+            r_c (np.ndarray): Output of CR algorithm (camera->planet in CAMERA frame)
+            T_p_c (np.ndarray): Passive rot. from Planet to Camera frame
+
+        Returns:
+            mu_next (np.ndarray): [x,y,z,vx,vy,vz]
+        """
+        return T_p_c @ mu[0:3]
+
+    def g_jac(self, mu: np.ndarray, r_c: np.ndarray, T_p_c: np.ndarray) -> np.ndarray: # So simple
+        """Jacobian of the Measurement Function
+
+        Args:
+            mu (np.ndarray): [x,y,z,vx,vy,vz] (not really used though)
+            r_c (np.ndarray): Output of CR algorithm (camera->planet in CAMERA frame)
+            T_p_c (np.ndarray): Passive rot. from Planet to Camera frame
+
+        Returns:
+            mu_next (np.ndarray): [x,y,z,vx,vy,vz]
+        """
+        H = np.zeros((3,6))
+        H[:,0:3] = T_p_c
+        return H
+    
+    def predict(self, u: np.ndarray = None) -> tuple[np.ndarray, np.ndarray]:
+        """EKF Predict Step (no input required though. kept in case we want to add)"""
+
+        # Predict the next state (t|t-1) from the current state (t-1|t-1)
+        self.mu = self.f_func(self.mu, u)
+
+        # Predict the next covariance
+        a_mat = self.f_jac(self.mu, u)
+        self.sigma = a_mat @ self.sigma @ a_mat.T + self.Q
+
+        return self.mu, self.sigma
+    
+    def update(self, r_c: np.ndarray, T_p_c: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """EKF Update Step
+
+        Args:
+            r_c (np.ndarray): (Measurement) Output of CR algorithm (camera->planet in CAMERA frame)
+            T_p_c (np.ndarray): Passive rot. from Planet to Camera frame
+
+        Returns:
+            mu_next (np.ndarray), Sigma_next (np.ndarray)
+        """
+
+        # Calculate the Kalman Gain
+        c_mat = self.g_jac(self.mu, r_c, T_p_c)
+        s_mat = c_mat @ self.sigma @ c_mat.T + self.R
+        k_mat = self.sigma @ c_mat.T @ np.linalg.inv(s_mat)
+
+        # Update the state estimate (t|t) from the predicted state (t|t-1)
+        self.mu += k_mat @ (r_c - self.g_func(self.mu, r_c, T_p_c))
+        # Update the covariance
+        self.sigma = (np.eye(self.sigma.shape[0]) - k_mat @ c_mat) @ self.sigma
+
+        return self.mu, self.sigma
+    
+
+
+# scratch
+if 0:
+    pass
+    # class EKFBase:
+    #     """
+    #     Base class for the Extended Kalman Filter (from HW solutions haha)
+    #     """
+    #     # def __init__(self, Q: np.ndarray, R: np.ndarray,
+    #     #              mu0: np.ndarray, sigma0: np.ndarray):
+    #     #     """Initialize the EKF with the system matrices"""
+    #     #     self.Q = np.array(Q)
+    #     #     self.R = np.array(R)
+
+    #     #     self.mu = mu0
+    #     #     self.sigma = sigma0
+
+    #     # def f_func(self, mu: np.ndarray, u: np.ndarray) -> np.ndarray:
+    #     #     raise NotImplementedError
+
+    #     # def f_jac(self, mu: np.ndarray, u: np.ndarray) -> np.ndarray:
+    #     #     raise NotImplementedError
+
+    #     # def g_func(self, mu: np.ndarray, meas: np.ndarray) -> np.ndarray:
+    #     #     raise NotImplementedError
+
+    #     # def g_jac(self, mu: np.ndarray, meas: np.ndarray) -> np.ndarray:
+    #     #     raise NotImplementedError
+
+    #     def predict(self, u: np.ndarray = None) -> tuple[np.ndarray, np.ndarray]:
+    #         """EKF Predict Step"""
+
+    #         # Predict the next state (t|t-1) from the current state (t-1|t-1)
+    #         self.mu = self.f_func(self.mu, u)
+
+    #         # Predict the next covariance
+    #         a_mat = self.f_jac(self.mu, u)
+    #         self.sigma = a_mat @ self.sigma @ a_mat.T + self.Q
+
+    #         return self.mu, self.sigma
+
+    #     def update(self, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    #         """EKF Update Step"""
+    #         # Calculate the Kalman Gain
+    #         c_mat = self.g_jac(self.mu, y)
+    #         s_mat = c_mat @ self.sigma @ c_mat.T + self.R
+    #         k_mat = self.sigma @ c_mat.T @ np.linalg.inv(s_mat)
+
+    #         # Update the state estimate (t|t) from the predicted state (t|t-1)
+    #         self.mu += k_mat @ (y - self.g_func(self.mu, y))
+    #         # Update the covariance
+    #         self.sigma = (np.eye(self.sigma.shape[0]) - k_mat @ c_mat) @ self.sigma
+
+    #         return self.mu, self.sigma
+
+    #     def step(self, u, y) -> tuple[np.ndarray, np.ndarray]:
+    #         """EKF Step"""
+    #         self.predict(u)
+    #         self.update(y)
+
+    #         return self.mu, self.sigma
+        
+
+

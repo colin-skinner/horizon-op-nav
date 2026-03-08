@@ -38,19 +38,26 @@ class ChristianRobinson:
             s[i] = xs[i] / norm(xs[i])
 
         # Step 7
-        assert xs.shape == (N,3)
-        H = xs # Already in this form I guess
+        assert s.shape == (N,3)
+        # Use normalized bearing vectors to avoid scale-induced degeneracy.
+        H = s
 
         # Step 8
         one_arr = np.ones((N, 1))
-        n = lstsq(H, one_arr)[0] # Could extract other metrics maybe?
+        n = lstsq(H, one_arr, rcond=None)[0] # Could extract other metrics maybe?
         # n = n.reshape((N,1))
 
         # Step 9
         T_c_p = T_p_c.T
 
         # Step 10
-        r_prime = (n.T @ n - 1)**(-1/2) * n
+        radicand = float((n.T @ n - 1.0).squeeze())
+        if radicand <= 0.0:
+            raise ValueError(
+                "CR step 10 invalid: n^T n - 1 <= 0. "
+                "Check edge quality, transform conventions, and ellipsoid scaling (a,b,c)."
+            )
+        r_prime = (radicand ** -0.5) * n
 
         # Step 11
         r_c = T_c_p @ D_inv @ r_prime

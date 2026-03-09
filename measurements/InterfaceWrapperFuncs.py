@@ -3,17 +3,6 @@ import importlib
 import matplotlib.pyplot as plt
 from pathlib import Path
 import sys
-parent_dir = Path.cwd().parent.resolve()
-sys.path.append(str(parent_dir))
-
-np.set_printoptions(precision=3)
-import state_to_edgepoints as state_to_edgepoints_module
-
-state_to_edgepoints_module = importlib.reload(state_to_edgepoints_module)
-state_to_edgepoints = state_to_edgepoints_module.state_to_edgepoints
-
-import sys
-
 
 
 from datetime import datetime
@@ -25,13 +14,16 @@ from utils import circle_points, camera_view, noise
 from classes import Camera, Body, PlanetImage, Pose
 
 from filters import ChristianRobinson 
-from Constants import RAD_TO_DEG, DEG_TO_RAD, ARCSEC_TO_RAD, RAD_TO_ARCSEC
+from trajectory.Constants import RAD_TO_DEG, DEG_TO_RAD, ARCSEC_TO_RAD, RAD_TO_ARCSEC
 
-import trajectory as T
-from PlanetaryData import Luna
-from Constants import G
+from trajectory.orbit import OrbitPropagator
+from trajectory.Constants import G, Luna
 from utils import circle_points
 
+
+from .state_to_edgepoints import state_to_edgepoints, rotation_matrix_from_euler_angles_deg
+
+np.set_printoptions(precision=3)
 
 # Fixed mapping between renderer-effective camera basis and CR/CW basis.
 # This is a proper rotation: 180 deg about +Z camera axis.
@@ -107,7 +99,7 @@ def gen_traj(Starting_state=None, dt=0.1, tf_orbital_period_fraction=0.5):
     tf = tf_orbital_period_fraction * orb_period
 
     # Propagator
-    op = T.OrbitPropagator(state0, tf, dt, [body])
+    op = OrbitPropagator(state0, tf, dt, [body])
     op.simulate()
 
     return op, body
@@ -198,7 +190,7 @@ def get_images(states, t, body, cam_offset, camera, num_images=10, cam_offset_un
     
     # Convert camera offset Euler angles to rotation matrix
     # This represents rotation from spacecraft body frame (Z toward planet) to camera frame
-    offset_rotation_matrix = state_to_edgepoints_module.rotation_matrix_from_euler_angles_deg(
+    offset_rotation_matrix = rotation_matrix_from_euler_angles_deg(
         x_deg=cam_offset[0],
         y_deg=cam_offset[1],
         z_deg=cam_offset[2],
@@ -252,7 +244,8 @@ def get_tpc(out):
     # Extract camera axes from render output
     forward_world = out.camera.forward_world  # Camera Z-axis in world frame
     up_world = out.camera.up_world            # Camera Y-axis in world frame
-    right_world = np.cross(up_world, forward_world)  # Camera X-axis
+    # right_world = np.cross(up_world, forward_world)  # Camera X-axis
+    right_world = np.cross(forward_world, up_world)  # Camera X-axis
     
     # Build world-to-camera rotation in renderer convention
     # (rows = camera axes in world frame)

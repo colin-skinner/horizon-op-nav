@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
-from Image_2_points import EdgeDetectionResult, find_body_edge_pixels
-from SphereGenerator import (
+from .Image_2_points import EdgeDetectionResult, find_body_edge_pixels
+from .SphereGenerator import (
 	CameraSettings,
 	CelestialBody,
 	NoiseSettings,

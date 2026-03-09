@@ -2,7 +2,7 @@ import numpy as np
 
 from numpy.linalg import norm, det
 from numpy import sin, cos, tan, sqrt, pi, arctan
-from Constants import RAD_TO_DEG, DEG_TO_RAD, ARCSEC_TO_RAD, RAD_TO_ARCSEC
+from trajectory.Constants import RAD_TO_DEG, DEG_TO_RAD, ARCSEC_TO_RAD, RAD_TO_ARCSEC
 from utils import circle_points, noise
 
 mu_unicode = "\u03bc"

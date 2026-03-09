@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.linalg import norm, inv, lstsq
-from Constants import G
+from trajectory.Constants import G
 
 
 class ChristianRobinson:

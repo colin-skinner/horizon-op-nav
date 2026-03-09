@@ -90,6 +90,9 @@ class SatEKF():
         v_new = v + self.dt*a
 
         return np.array([*r_new, *v_new])
+    
+
+    
 
     def f_jac(self, mu: np.ndarray, u: np.ndarray = None) -> np.ndarray:
         """Jacobian of the State Transition Function"""
@@ -120,7 +123,26 @@ class SatEKF():
         Returns:
             mu_next (np.ndarray): [x,y,z,vx,vy,vz]
         """
-        return T_p_c @ mu[0:3]
+        meas = T_p_c @ mu[0:3]
+        print(f"Measurement function output: {meas}")
+        return meas
+    
+    def phony_g_func(self, mu: np.ndarray, r_c: np.ndarray, T_p_c: np.ndarray) -> np.ndarray:
+        """Measurement function that ignores the state and just returns the measurement (for testing)"""
+
+        print(f"Phony measurement function output: {r_c}")
+
+        return r_c
+    
+    def phony_g_jac(self, mu: np.ndarray, r_c: np.ndarray, T_p_c: np.ndarray) -> np.ndarray:
+        """Jacobian of the phony measurement function (just identity)"""
+
+        H = np.zeros((3,6))
+        H[:,0:3] = np.eye(3)
+        return H
+    
+
+    
 
     def g_jac(self, mu: np.ndarray, r_c: np.ndarray, T_p_c: np.ndarray) -> np.ndarray: # So simple
         """Jacobian of the Measurement Function
@@ -141,11 +163,9 @@ class SatEKF():
         """EKF Predict Step (no input required though. kept in case we want to add)"""
 
         # Predict the next state (t|t-1) from the current state (t-1|t-1)
-        self.mu = self.f_func(self.mu, u)
-
-        # Predict the next covariance
-        a_mat = self.f_jac(self.mu, u)
+        a_mat = self.f_jac(self.mu, u)             # ✓ Evaluate at current state FIRST
         self.sigma = a_mat @ self.sigma @ a_mat.T + self.Q
+        self.mu = self.f_func(self.mu, u)          # Then update state
 
         return self.mu, self.sigma
     
@@ -235,5 +255,6 @@ if 0:
 
     #         return self.mu, self.sigma
         
+
 
 

@@ -113,10 +113,10 @@ def gen_traj(Starting_state=None, dt=0.1, tf_orbital_period_fraction=0.5):
     return op, body
 
 #make 3d 
-def plot_traj(op, body):
+def plot_traj(states, body):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    ax.plot(op.states[:,0], op.states[:,1], op.states[:,2], label='Trajectory')
+    ax.plot(states[:,0], states[:,1], states[:,2], label='Trajectory')
     # Plot the celestial body as a sphere
     u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
     x = body["radius"] * np.cos(u) * np.sin(v)
@@ -127,10 +127,38 @@ def plot_traj(op, body):
     ax.set_ylabel('Y (km)')
     ax.set_zlabel('Z (km)')
     # scale all axis equally
-    max_range = np.array([op.states[:,0].max()-op.states[:,0].min(), op.states[:,1].max()-op.states[:,1].min(), op.states[:,2].max()-op.states[:,2].min()]).max() / 2.0
-    mid_x = (op.states[:,0].max()+op.states[:,0].min()) * 0.5
-    mid_y = (op.states[:,1].max()+op.states[:,1].min()) * 0.5
-    mid_z = (op.states[:,2].max()+op.states[:,2].min()) * 0.5
+    max_range = np.array([states[:,0].max()-states[:,0].min(), states[:,1].max()-states[:,1].min(), states[:,2].max()-states[:,2].min()]).max() / 2.0
+    mid_x = (states[:,0].max()+states[:,0].min()) * 0.5
+    mid_y = (states[:,1].max()+states[:,1].min()) * 0.5
+    mid_z = (states[:,2].max()+states[:,2].min()) * 0.5
+    ax.set_xlim(mid_x - max_range, mid_x + max_range)
+    ax.set_ylim(mid_y - max_range, mid_y + max_range)
+    ax.set_zlim(mid_z - max_range, mid_z + max_range)
+    ax.set_title('Spacecraft Trajectory around Celestial Body')
+    plt.legend()
+    plt.show()
+
+
+def plot_trajs(states_noisy, states_perfect, body):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    
+    ax.plot(states_noisy[:,0], states_noisy[:,1], states_noisy[:,2], label='estimated Trajectory', color='r')
+    ax.plot(states_perfect[:,0], states_perfect[:,1], states_perfect[:,2], label='noisy Trajectory', color='g', linestyle='--')
+    # Plot the celestial body as a sphere
+    u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
+    x = body["radius"] * np.cos(u) * np.sin(v)
+    y = body["radius"] * np.sin(u) * np.sin(v)
+    z = body["radius"] * np.cos(v)
+    ax.plot_surface(x, y, z, color='b', alpha=0.5)
+    ax.set_xlabel('X (km)')
+    ax.set_ylabel('Y (km)')
+    ax.set_zlabel('Z (km)')
+    # scale all axis equally
+    max_range = np.array([states_noisy[:,0].max()-states_noisy[:,0].min(), states_noisy[:,1].max()-states_noisy[:,1].min(), states_noisy[:,2].max()-states_noisy[:,2].min()]).max() / 2.0
+    mid_x = (states_noisy[:,0].max()+states_noisy[:,0].min()) * 0.5
+    mid_y = (states_noisy[:,1].max()+states_noisy[:,1].min()) * 0.5
+    mid_z = (states_noisy[:,2].max()+states_noisy[:,2].min()) * 0.5
     ax.set_xlim(mid_x - max_range, mid_x + max_range)
     ax.set_ylim(mid_y - max_range, mid_y + max_range)
     ax.set_zlim(mid_z - max_range, mid_z + max_range)
@@ -141,8 +169,7 @@ def plot_traj(op, body):
 
 
 
-
-def get_images(op, body, cam_offset, camera, num_images=10, cam_offset_units="auto"):
+def get_images(states, t, body, cam_offset, camera, num_images=10, cam_offset_units="auto"):
     """
     Generate rendered images along a trajectory with camera offset.
     
@@ -162,11 +189,11 @@ def get_images(op, body, cam_offset, camera, num_images=10, cam_offset_units="au
         outs: List of StateToEdgePointsResult objects
         states: List of spacecraft states
     """
-    indices = np.linspace(0, len(op.states[:-1])-1, num_images, dtype=int)
+    
     images = []
     edges = []
     outs = []
-    states = []
+    states_out = []
     times = []
     
     # Convert camera offset Euler angles to rotation matrix
@@ -177,9 +204,10 @@ def get_images(op, body, cam_offset, camera, num_images=10, cam_offset_units="au
         z_deg=cam_offset[2],
     )
     
-    for i in indices:
-        state = op.states[i]
-        print(f"State at t={op.ts[i]:.1f}s: {state}")
+   
+    for i in range(num_images):
+        state = states[i]
+        print(f"State at t={t[i]:.1f}s: {state}")
         out = state_to_edgepoints(
             spacecraft_position_relative_to_body_center=state[0:3],
             attitude_offset_from_center_pointing=offset_rotation_matrix,
@@ -200,9 +228,9 @@ def get_images(op, body, cam_offset, camera, num_images=10, cam_offset_units="au
         images.append(out.render.image)
         edges.append(out.edges.edge_coordinates_xy)
         outs.append(out)
-        states.append(state)
-        times.append(op.ts[i])
-    return images, edges, outs, states, times
+        states_out.append(state)
+        times.append(t[i])
+    return images, edges, outs, states_out, times
 
 def get_tpc(out):
     """

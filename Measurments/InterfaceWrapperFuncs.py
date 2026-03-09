@@ -33,6 +33,12 @@ from Constants import G
 from utils import circle_points
 
 
+# Fixed mapping between renderer-effective camera basis and CR/CW basis.
+# This is a proper rotation: 180 deg about +Z camera axis.
+R_CR_FROM_RENDER = np.diag([-1.0, -1.0, 1.0])
+R_RENDER_FROM_CR = R_CR_FROM_RENDER.T
+
+
 
 
 
@@ -76,7 +82,7 @@ def Set_camera():
             mu_angle = mu / f       # pixel angle resolution [rad]
             fov = fov_diag / np.sqrt(2)
     
-    return mu, f, n_pixels
+    return  f, mu, n_pixels
         
 def gen_traj(Starting_state=None, dt=0.1, tf_orbital_period_fraction=0.5):
     body = Luna # could be moon
@@ -134,28 +140,56 @@ def plot_traj(op, body):
 
 
 
-def get_images(op, body, camera, num_images=10):
 
+
+def get_images(op, body, cam_offset, camera, num_images=10, cam_offset_units="auto"):
+    """
+    Generate rendered images along a trajectory with camera offset.
+    
+    Args:
+        op: OrbitPropagator with simulated trajectory
+        body: Body dictionary with radius and other properties
+        cam_offset: Camera offset Euler angles [x, y, z] in degrees.
+                   These describe the camera boresight relative to the spacecraft body frame,
+                   where the spacecraft Z-axis points toward the planet center.
+        camera: Camera specification dict with K, width, height
+        num_images: Number of images to generate along trajectory
+        cam_offset_units: Unused legacy parameter
+    
+    Returns:
+        images: List of rendered images
+        edges: List of detected edge point arrays
+        outs: List of StateToEdgePointsResult objects
+        states: List of spacecraft states
+    """
     indices = np.linspace(0, len(op.states[:-1])-1, num_images, dtype=int)
     images = []
     edges = []
     outs = []
     states = []
+    times = []
     
-
+    # Convert camera offset Euler angles to rotation matrix
+    # This represents rotation from spacecraft body frame (Z toward planet) to camera frame
+    offset_rotation_matrix = state_to_edgepoints_module.rotation_matrix_from_euler_angles_deg(
+        x_deg=cam_offset[0],
+        y_deg=cam_offset[1],
+        z_deg=cam_offset[2],
+    )
+    
     for i in indices:
         state = op.states[i]
         print(f"State at t={op.ts[i]:.1f}s: {state}")
         out = state_to_edgepoints(
             spacecraft_position_relative_to_body_center=state[0:3],
-            attitude_offset_from_center_pointing=np.eye(3),
-            k_matrix= camera["K"],
+            attitude_offset_from_center_pointing=offset_rotation_matrix,
+            k_matrix=camera["K"],
             width=camera["width"],
             height=camera["height"],
             noise_level=0.00,
             body_center_world=np.array([0.0, 0.0, 0.0], dtype=np.float64),
             body_radius=body["radius"],
-            attitude_offset_convention="world_to_camera",
+            attitude_offset_convention="world_to_camera",  # Rotation from spacecraft body to camera frame
             light_direction_world=np.array([0.5, 0, 0], dtype=np.float64),
             color_tolerance=4.5,
             keep_largest_component_only=True,
@@ -167,51 +201,217 @@ def get_images(op, body, camera, num_images=10):
         edges.append(out.edges.edge_coordinates_xy)
         outs.append(out)
         states.append(state)
-    return images, edges, outs, states
+        times.append(op.ts[i])
+    return images, edges, outs, states, times
 
-
-def run_step(edges, rho_p_true, T_p_c, offset = None , print_stats = False,  cr_alg = ChristianRobinson(np.eye(3), 1, 1, 1)):
+def get_tpc(out):
     """
-    rho: P->C
+    Compute planet-to-camera rotation matrix (TPC) from render output.
     
-    r: C->P
+    TPC transforms vectors from planet frame to camera frame (in CR convention).
+    Assumes planet frame is aligned with world frame (same orientation, different origin).
     
-    i.e. 
-    r = -rho
+    The renderer and CR algorithm use different camera frame conventions:
+    - Renderer: standard OpenGL-style camera frame
+    - CR: 180° rotation about Z-axis from renderer frame
+    
+    Args:
+        out: StateToEdgePointsResult containing camera information
+    
+    Returns:
+        TPC: 3x3 rotation matrix transforming vectors from planet to CR camera frame
     """
-    rho_c_true = T_p_c @ rho_p_true # P->C in camera frame (i.e. as seen looking INTO the lens from the planet)
-    r_c_true = -rho_c_true
-    r_p_true = -rho_p_true
+    # Extract camera axes from render output
+    forward_world = out.camera.forward_world  # Camera Z-axis in world frame
+    up_world = out.camera.up_world            # Camera Y-axis in world frame
+    right_world = np.cross(up_world, forward_world)  # Camera X-axis
+    
+    # Build world-to-camera rotation in renderer convention
+    # (rows = camera axes in world frame)
+    R_world_to_render = np.stack([right_world, up_world, forward_world], axis=0)
+    
+    # Transform from renderer frame to CR frame
+    # R_CR_FROM_RENDER is a 180° rotation about Z-axis
+    R_world_to_cr = R_CR_FROM_RENDER @ R_world_to_render
+    
+    # Since planet frame is aligned with world frame (just different origin),
+    # planet-to-camera rotation = world-to-camera rotation
+    tpc = R_world_to_cr
+    
+    return tpc
 
-    #if r_c_true[2] < 0:
-    #    raise ValueError("Planet is behind the camera")
+
+
+def run_step(edges, rho_p_true, T_p_c, offset=None, print_stats=False, cr_alg=ChristianRobinson(np.eye(3), 1, 1, 1)):
+    """
+    Run Christian-Robinson algorithm on edge points.
+    
+    Args:
+        edges: Edge points in homogeneous coordinates [x, y, 1]
+        rho_p_true: True vector from planet to camera in planet frame
+        T_p_c: Planet-to-camera rotation matrix
+        offset: Unused legacy parameter
+        print_stats: Whether to print diagnostic statistics
+        cr_alg: Christian-Robinson algorithm instance
+    
+    Returns:
+        r_c_est: Estimated camera-to-planet vector in camera frame
+        r_p_est: Estimated camera-to-planet vector in planet frame
+    
+    Note:
+        rho: P->C (planet to camera)
+        r: C->P (camera to planet)
+        i.e. r = -rho
+    """
+    rho_c_true = T_p_c @ rho_p_true  # P->C in camera frame
+    r_c_true = -rho_c_true  # C->P in camera frame
+    r_p_true = -rho_p_true  # C->P in planet frame
 
     # Calculate each time there is a new image
     pose = Pose(rho_p_true, T_p_c)
     
-
-    if offset is not None:
-        offset = np.asarray(offset)
-    
-
     # Run algorithm (gives vector from camera TO planet in camera frame)
     r_c_est = cr_alg.run(edges, pose.T_p_c)
     
-    # Vector directions are flipped
+    # Transform estimate to planet frame
     r_p_est = pose.T_p_c.T @ r_c_est
-
 
     # Print statistics
     if print_stats:
         with np.printoptions(precision=2, suppress=True):
-            print(f"Calc Position:\n - (C->P in camera frame): {r_c_est} ({np.linalg.norm(r_c_est)})m")
-            print(f" - (C->P in planet frame): {r_p_est} ({np.linalg.norm(r_p_est)})m")
-            print(f"Actual position:\n - (C->P in camera frame): {r_c_true} ({np.linalg.norm(r_c_true)})m")
-            print(f" - (C->P in planet frame): {r_p_true} ({np.linalg.norm(r_p_true)})m")
-            print(f"Est Error - Actual:\n - (Camera frame): {r_c_est - r_c_true} ({np.linalg.norm(r_c_est - r_c_true)})m")
-            print(f" - (Planet frame): {r_p_est - r_p_true} ({np.linalg.norm(r_p_est - r_p_true)})m")
+            print(f"Calc Position:\n - (C->P in camera frame): {r_c_est} ({np.linalg.norm(r_c_est):.2f} km)")
+            print(f" - (C->P in planet frame): {r_p_est} ({np.linalg.norm(r_p_est):.2f} km)")
+            print(f"Actual position:\n - (C->P in camera frame): {r_c_true} ({np.linalg.norm(r_c_true):.2f} km)")
+            print(f" - (C->P in planet frame): {r_p_true} ({np.linalg.norm(r_p_true):.2f} km)")
+            print(f"Est Error - Actual:\n - (Camera frame): {r_c_est - r_c_true} ({np.linalg.norm(r_c_est - r_c_true):.2f} km)")
+            print(f" - (Planet frame): {r_p_est - r_p_true} ({np.linalg.norm(r_p_est - r_p_true):.2f} km)")
             
-            print(f"Distance error: {abs(np.linalg.norm(r_c_true) - np.linalg.norm(r_c_est))} m ({100*abs(np.linalg.norm(r_c_true) - np.linalg.norm(r_c_est))/np.linalg.norm(r_c_true):.10f}%)")
+            dist_error = abs(np.linalg.norm(r_c_true) - np.linalg.norm(r_c_est))
+            dist_error_pct = 100 * dist_error / np.linalg.norm(r_c_true)
+            print(f"Distance error: {dist_error:.2f} km ({dist_error_pct:.6f}%)")
             
-            print(f"Angular error: {np.degrees(np.arccos(np.dot(r_c_est, r_c_true) /(np.linalg.norm(r_c_est)*np.linalg.norm(r_c_true)))):.2f} degrees")
+            # Avoid division by zero and numerical issues in arccos
+            cos_angle = np.dot(r_c_est, r_c_true) / (np.linalg.norm(r_c_est) * np.linalg.norm(r_c_true))
+            cos_angle = np.clip(cos_angle, -1.0, 1.0)
+            angular_error_deg = np.degrees(np.arccos(cos_angle))
+            print(f"Angular error: {angular_error_deg:.4f} degrees")
+    
     return r_c_est, r_p_est
+
+
+
+def plot_est_dist_xyz(
+    times,
+    r_c_trues,
+    r_c_ests,
+    time_limits=None,
+    dist_limits=None,
+    x_limits=None,
+    y_limits=None,
+    z_limits=None,
+):
+    """
+    Plot estimated vs true distance and vector components over time.
+
+    Args:
+        times: Array of time points.
+        r_c_trues: Array of true camera-to-planet vectors in camera frame.
+        r_c_ests: Array of estimated camera-to-planet vectors in camera frame.
+        time_limits: Optional (t_min, t_max) for x-axis on all subplots.
+        dist_limits: Optional (min, max) for distance subplot y-axis.
+        x_limits: Optional (min, max) for X component subplot y-axis.
+        y_limits: Optional (min, max) for Y component subplot y-axis.
+        z_limits: Optional (min, max) for Z component subplot y-axis.
+    """
+    times = np.asarray(times)
+    r_c_trues = np.asarray(r_c_trues)
+    r_c_ests = np.asarray(r_c_ests)
+
+    r_c_true_dists = np.linalg.norm(r_c_trues, axis=1)
+    r_c_est_dists = np.linalg.norm(r_c_ests, axis=1)
+
+    fig, axes = plt.subplots(4, 1, figsize=(10, 12), sharex=True)
+    
+    axes[0].plot(times, r_c_true_dists, label="True Distance (km)", marker="o")
+    axes[0].plot(times, r_c_est_dists, label="Estimated Distance (km)", marker="x")
+    axes[0].set_ylabel("Distance (km)")
+    axes[0].set_title("Camera-to-Planet Distance")
+    axes[0].legend()
+    axes[0].grid(True)
+
+    axes[1].plot(times, r_c_trues[:, 0], label="True X", marker="o")
+    axes[1].plot(times, r_c_ests[:, 0], label="Estimated X", marker="x")
+    axes[1].set_ylabel("X (km)")
+    axes[1].set_title("Camera-Frame X Component")
+    axes[1].legend()
+    axes[1].grid(True)
+
+    axes[2].plot(times, r_c_trues[:, 1], label="True Y", marker="o")
+    axes[2].plot(times, r_c_ests[:, 1], label="Estimated Y", marker="x")
+    axes[2].set_ylabel("Y (km)")
+    axes[2].set_title("Camera-Frame Y Component")
+    axes[2].legend()
+    axes[2].grid(True)
+
+    axes[3].plot(times, r_c_trues[:, 2], label="True Z", marker="o")
+    axes[3].plot(times, r_c_ests[:, 2], label="Estimated Z", marker="x")
+    axes[3].set_xlabel("Time (s)")
+    axes[3].set_ylabel("Z (km)")
+    axes[3].set_title("Camera-Frame Z Component")
+    axes[3].legend()
+    axes[3].grid(True)
+
+    if time_limits is not None:
+        for ax in axes:
+            ax.set_xlim(time_limits)
+    if dist_limits is not None:
+        axes[0].set_ylim(dist_limits)
+    if x_limits is not None:
+        axes[1].set_ylim(x_limits)
+    if y_limits is not None:
+        axes[2].set_ylim(y_limits)
+    if z_limits is not None:
+        axes[3].set_ylim(z_limits)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_est_dist_xyz_errors(
+    times,
+    r_c_trues,
+    r_c_ests,
+):
+    
+    
+    times = np.asarray(times)
+    r_c_trues = np.asarray(r_c_trues)
+    r_c_ests = np.asarray(r_c_ests)
+
+    r_c_true_dists = np.linalg.norm(r_c_trues, axis=1)
+    r_c_est_dists = np.linalg.norm(r_c_ests, axis=1)
+
+    dist_error = r_c_est_dists - r_c_true_dists
+    X_error = r_c_ests[:, 0] - r_c_trues[:, 0]
+    Y_error = r_c_ests[:, 1] - r_c_trues[:, 1]
+    Z_error = r_c_ests[:, 2] - r_c_trues[:, 2]
+
+    fig, axes = plt.subplots(2, 1, figsize=(10, 12), sharex=True)
+    
+    axes[0].plot(times, dist_error, label="Distance Error (km)", marker="o")    
+    axes[0].set_ylabel("Distance error (km)")
+    axes[0].set_title("Camera-to-Planet Distance Error")
+    axes[0].legend()
+    axes[0].grid(True)
+
+    axes[1].plot(times, X_error, label="X Error (km)", marker="o")
+    axes[1].plot(times, Y_error, label="Y Error (km)", marker="o")
+    axes[1].plot(times, Z_error, label="Z Error (km)", marker="o")
+    axes[1].set_ylabel("X,Y,Z error (km)")
+    axes[1].set_title("Camera-Frame error Components")
+    axes[1].legend()
+    axes[1].grid(True)
+
+    plt.tight_layout()
+    plt.show()
+

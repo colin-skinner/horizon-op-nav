@@ -37,18 +37,24 @@ def _validate_rotation_matrix(rotation_matrix: np.ndarray) -> np.ndarray:
 		)
 	return r
 
-def plot_edge_points(out, w, h):
-    fig, ax = plt.subplots(figsize=(10, 5.6), dpi=120)
-    ax.imshow(out.render.image)
-    edge_xy = out.edges.edge_coordinates_xy
-    ax.scatter(edge_xy[:, 0], edge_xy[:, 1], s=0.9, c="yellow", alpha=0.8)
-    ax.set_title("state_to_edgepoints wrapper test (relative state + relative attitude) [km]")
-    ax.set_xlim(0, w - 1)
-    ax.set_ylim(h - 1, 0)
-    ax.set_xlabel("x [px]")
-    ax.set_ylabel("y [px]")
-    plt.tight_layout()
-    plt.show()
+def plot_edge_points(out, w, h, x_limits=None, y_limits=None):
+	fig, ax = plt.subplots(figsize=(10, 5.6), dpi=120)
+	ax.imshow(out.render.image)
+	edge_xy = out.edges.edge_coordinates_xy
+	ax.scatter(edge_xy[:, 0], edge_xy[:, 1], s=0.9, c="yellow", alpha=0.8)
+	ax.set_title("state_to_edgepoints wrapper test (relative state + relative attitude) [km]")
+	if x_limits is None:
+		ax.set_xlim(0, w - 1)
+	else:
+		ax.set_xlim(x_limits)
+	if y_limits is None:
+		ax.set_ylim(h - 1, 0)
+	else:
+		ax.set_ylim(y_limits)
+	ax.set_xlabel("x [px]")
+	ax.set_ylabel("y [px]")
+	plt.tight_layout()
+	plt.show()
 
 
 def rotation_matrix_from_euler_angles_deg(x_deg: float = 0.0, y_deg: float = 0.0, z_deg: float = 0.0) -> np.ndarray:
@@ -56,6 +62,20 @@ def rotation_matrix_from_euler_angles_deg(x_deg: float = 0.0, y_deg: float = 0.0
 
 	The returned matrix uses the composition R = Rz @ Ry @ Rx, where
 	Rx, Ry, Rz are rotations about x, y, z axes respectively.
+	
+	When used with attitude_offset_from_center_pointing:
+	- The spacecraft body frame has Z-axis pointing toward the planet center.
+	- These Euler angles describe the camera boresight relative to that frame.
+	- Example: [0, 10, 0] means camera boresight is 10° rotated about Y-axis
+	  from the spacecraft Z-axis (which points at planet).
+	
+	Args:
+	    x_deg: Rotation about X-axis in degrees
+	    y_deg: Rotation about Y-axis in degrees
+	    z_deg: Rotation about Z-axis in degrees
+	
+	Returns:
+	    3x3 rotation matrix representing spacecraft-to-camera transformation
 	"""
 	rx = np.deg2rad(float(x_deg))
 	ry_ = np.deg2rad(float(y_deg))
@@ -262,6 +282,16 @@ def state_to_edgepoints(
 	- spacecraft_position_world or spacecraft_position_relative_to_body_center: choose one.
 	- camera_rotation_matrix (absolute) or attitude_offset_from_center_pointing (relative): choose one.
 	  If both are omitted, camera is center-pointing.
+	  
+	IMPORTANT: attitude_offset_from_center_pointing conventions:
+	  - The "center-pointing" frame has Z-axis pointing from spacecraft to planet center (spacecraft body frame).
+	  - attitude_offset_from_center_pointing is a rotation matrix representing the offset from this frame.
+	  - With attitude_offset_convention="world_to_camera" (default):
+	    * The matrix represents rotation from spacecraft body frame to camera frame.
+	    * Euler angles [x, y, z] describe camera boresight relative to spacecraft Z-axis (pointing at planet).
+	  - With attitude_offset_convention="camera_to_world":
+	    * The matrix represents rotation from camera frame to spacecraft body frame (transpose of above).
+	    
 	- k_matrix: intrinsic camera matrix [[fx, 0, cx], [0, fy, cy], [0, 0, 1]].
 	- width, height: image dimensions.
 	- noise_level: scalar noise strength (0 disables noise).

@@ -224,11 +224,11 @@ def get_images(states, t, body, cam_offset, camera, num_images=10, cam_offset_un
         times.append(t[i])
     return images, edges, outs, states_out, times
 
-def get_tpc(out):
+def get_T_c_p(out):
     """
-    Compute planet-to-camera rotation matrix (TPC) from render output.
+    Compute planet-to-camera rotation matrix (T_c_p) from render output.
     
-    TPC transforms vectors from planet frame to camera frame (in CR convention).
+    T_c_p transforms vectors from planet frame to camera frame.
     Assumes planet frame is aligned with world frame (same orientation, different origin).
     
     The renderer and CR algorithm use different camera frame conventions:
@@ -239,7 +239,7 @@ def get_tpc(out):
         out: StateToEdgePointsResult containing camera information
     
     Returns:
-        TPC: 3x3 rotation matrix transforming vectors from planet to CR camera frame
+        T_: 3x3 rotation matrix transforming vectors from camera to planet frame
     """
     # Extract camera axes from render output
     forward_world = out.camera.forward_world  # Camera Z-axis in world frame
@@ -257,20 +257,20 @@ def get_tpc(out):
     
     # Since planet frame is aligned with world frame (just different origin),
     # planet-to-camera rotation = world-to-camera rotation
-    tpc = R_world_to_cr
+    T_c_p = R_world_to_cr
     
-    return tpc
+    return T_c_p
 
 
 
-def run_step(edges, rho_p_true, T_p_c, offset=None, print_stats=False, cr_alg=ChristianRobinson(np.eye(3), 1, 1, 1)):
+def run_step(edges, rho_p_true, T_c_p, offset=None, print_stats=False, cr_alg=ChristianRobinson(np.eye(3), 1, 1, 1)):
     """
     Run Christian-Robinson algorithm on edge points.
     
     Args:
         edges: Edge points in homogeneous coordinates [x, y, 1]
         rho_p_true: True vector from planet to camera in planet frame
-        T_p_c: Planet-to-camera rotation matrix
+        T_c_p: Camera-to-planet rotation matrix
         offset: Unused legacy parameter
         print_stats: Whether to print diagnostic statistics
         cr_alg: Christian-Robinson algorithm instance
@@ -284,18 +284,19 @@ def run_step(edges, rho_p_true, T_p_c, offset=None, print_stats=False, cr_alg=Ch
         r: C->P (camera to planet)
         i.e. r = -rho
     """
-    rho_c_true = T_p_c @ rho_p_true  # P->C in camera frame
+    rho_c_true = T_c_p @ rho_p_true  # P->C in camera frame
     r_c_true = -rho_c_true  # C->P in camera frame
     r_p_true = -rho_p_true  # C->P in planet frame
 
     # Calculate each time there is a new image
-    pose = Pose(rho_p_true, T_p_c)
+    pose = Pose(rho_p_true, T_c_p)
     
     # Run algorithm (gives vector from camera TO planet in camera frame)
-    r_c_est = cr_alg.run(edges, pose.T_p_c)
+    T_p_c = T_c_p.T
+    r_c_est = cr_alg.run(edges, T_p_c)
     
     # Transform estimate to planet frame
-    r_p_est = pose.T_p_c.T @ r_c_est
+    r_p_est = T_p_c @ r_c_est
 
     # Print statistics
     if print_stats:

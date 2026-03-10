@@ -111,12 +111,11 @@ class SatEKF():
         return F
 
 
-    def g_func(self, mu: np.ndarray, r_c: np.ndarray, T_c_p: np.ndarray) -> np.ndarray: # So simple
+    def g_func(self, mu: np.ndarray, T_c_p: np.ndarray) -> np.ndarray: # So simple
         """Measurement function
 
         Args:
             mu (np.ndarray): [x,y,z,vx,vy,vz]
-            r_c (np.ndarray): Output of CR algorithm (camera->planet in CAMERA frame)
             T_c_p (np.ndarray): Passive rot. from Planet to Camera frame
 
         Returns:
@@ -143,12 +142,11 @@ class SatEKF():
 
     
 
-    def g_jac(self, mu: np.ndarray, r_c: np.ndarray, T_c_p: np.ndarray) -> np.ndarray: # So simple
+    def g_jac(self, mu: np.ndarray, T_c_p: np.ndarray) -> np.ndarray: # So simple
         """Jacobian of the Measurement Function
 
         Args:
             mu (np.ndarray): [x,y,z,vx,vy,vz] (not really used though)
-            r_c (np.ndarray): Output of CR algorithm (camera->planet in CAMERA frame)
             T_c_p (np.ndarray): Passive rot. from Planet to Camera frame
 
         Returns:
@@ -185,7 +183,7 @@ class SatEKF():
         k_mat = self.sigma @ c_mat.T @ np.linalg.inv(s_mat)
 
         # Update the state estimate (t|t) from the predicted state (t|t-1)
-        self.mu += k_mat @ (r_c - self.g_func(self.mu, r_c, T_c_p))
+        self.mu += k_mat @ (r_c - self.g_func(self.mu, T_c_p))
         # Update the covariance
         self.sigma = (np.eye(self.sigma.shape[0]) - k_mat @ c_mat) @ self.sigma
 

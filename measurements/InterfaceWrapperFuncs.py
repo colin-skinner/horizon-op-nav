@@ -131,12 +131,15 @@ def plot_traj(states, body):
     plt.show()
 
 
-def plot_trajs(states_noisy, states_perfect, body):
-    fig = plt.figure()
+def plot_trajs(states_noisy, states_perfect, body, figsize=(12,8), labels = None):
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
+
+    labels = labels if labels is not None else ('estimated Trajectory', 'noisy Trajectory')
     
-    ax.plot(states_noisy[:,0], states_noisy[:,1], states_noisy[:,2], label='estimated Trajectory', color='r')
-    ax.plot(states_perfect[:,0], states_perfect[:,1], states_perfect[:,2], label='noisy Trajectory', color='g', linestyle='--')
+    
+    ax.plot(states_noisy[:,0], states_noisy[:,1], states_noisy[:,2], label=labels[0], color='r')
+    ax.plot(states_perfect[:,0], states_perfect[:,1], states_perfect[:,2], label=labels[1], color='g', linestyle='--')
     # Plot the celestial body as a sphere
     u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
     x = body["radius"] * np.cos(u) * np.sin(v)
@@ -258,7 +261,7 @@ def get_T_c_p(out):
     # Since planet frame is aligned with world frame (just different origin),
     # planet-to-camera rotation = world-to-camera rotation
     T_c_p = R_world_to_cr
-    
+
     return T_c_p
 
 

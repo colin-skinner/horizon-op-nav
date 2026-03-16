@@ -2,7 +2,7 @@ import numpy as np
 
 from numpy.linalg import norm, det
 from numpy import sin, cos, tan, sqrt, pi, arctan
-from Constants import RAD_TO_DEG, DEG_TO_RAD, ARCSEC_TO_RAD, RAD_TO_ARCSEC
+from trajectory.Constants import RAD_TO_DEG, DEG_TO_RAD, ARCSEC_TO_RAD, RAD_TO_ARCSEC
 from utils import circle_points, noise
 
 mu_unicode = "\u03bc"
@@ -93,17 +93,19 @@ class Body:
 class Pose:
     def __init__(self,
         r_truth: np.ndarray,
-        T_p_c: np.ndarray
+        T_c_p: np.ndarray
     ):
             
         """
 
         Args:
             r_truth (np.ndarray): Position relative to central body [km]
-            T_p_c (np.ndarray(3,3)): Passive rotation from PLANET to CAMERA 
+            T_c_p (np.ndarray(3,3)): Passive rotation from PLANET to CAMERA 
         """
         self.r_truth = r_truth
-        self.T_p_c = T_p_c
+
+        # From PLANET to CAMERA
+        self.T_c_p = T_c_p
 
     def __str__(self):
         s = "Pose:\n"
@@ -166,7 +168,7 @@ class PlanetImage:
             # From 
             #   -   planet->camera in camera frame
             #   -   camera->planet in camera frame (for image generation)
-            planet_vector_cam = pose.T_p_c @ -pose.r_truth 
+            planet_vector_cam = pose.T_c_p @ -pose.r_truth 
 
             Xc, Yc, Zc = planet_vector_cam
 

@@ -105,8 +105,8 @@ def gen_traj(Starting_state=None, dt=0.1, tf_orbital_period_fraction=0.5):
     return op, body
 
 #make 3d 
-def plot_traj(states, body):
-    fig = plt.figure()
+def plot_traj(states, body, figsize = (16,8)):
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
     ax.plot(states[:,0], states[:,1], states[:,2], label='Trajectory')
     # Plot the celestial body as a sphere
@@ -164,7 +164,7 @@ def plot_trajs(states_noisy, states_perfect, body, figsize=(12,8), labels = None
 
 
 
-def get_images(states, t, body, cam_offset, camera, num_images=10, cam_offset_units="auto"):
+def get_images(states, t, body, cam_offset, camera, num_images=10, offset_variances = (0, 0, 0), cam_offset_units="auto"):
     """
     Generate rendered images along a trajectory with camera offset.
     
@@ -176,6 +176,7 @@ def get_images(states, t, body, cam_offset, camera, num_images=10, cam_offset_un
                    where the spacecraft Z-axis points toward the planet center.
         camera: Camera specification dict with K, width, height
         num_images: Number of images to generate along trajectory
+        offset_variances: euler angle standard deviations for random noise [deg^2]
         cam_offset_units: Unused legacy parameter
     
     Returns:
@@ -193,16 +194,25 @@ def get_images(states, t, body, cam_offset, camera, num_images=10, cam_offset_un
     
     # Convert camera offset Euler angles to rotation matrix
     # This represents rotation from spacecraft body frame (Z toward planet) to camera frame
-    offset_rotation_matrix = rotation_matrix_from_euler_angles_deg(
-        x_deg=cam_offset[0],
-        y_deg=cam_offset[1],
-        z_deg=cam_offset[2],
-    )
+    # offset_rotation_matrix = rotation_matrix_from_euler_angles_deg(
+    #     x_deg=cam_offset[0],
+    #     y_deg=cam_offset[1],
+    #     z_deg=cam_offset[2],
+    # )
+
+    noise_matrix = np.diag(offset_variances)
     
    
     for i in range(num_images):
         state = states[i]
         print(f"State at t={t[i]:.1f}s: {state}")
+
+
+        
+        offset_rotation_matrix = rotation_matrix_from_euler_angles_deg(
+            *noise(noise_matrix)
+        )
+
         out = state_to_edgepoints(
             spacecraft_position_relative_to_body_center=state[0:3],
             attitude_offset_from_center_pointing=offset_rotation_matrix,

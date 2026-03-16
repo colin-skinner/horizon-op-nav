@@ -178,7 +178,7 @@ class SatEKF():
         """
 
         # Calculate the Kalman Gain
-        c_mat = self.g_jac(self.mu, r_c, T_c_p)
+        c_mat = self.g_jac(self.mu, T_c_p)
         s_mat = c_mat @ self.sigma @ c_mat.T + self.R
         k_mat = self.sigma @ c_mat.T @ np.linalg.inv(s_mat)
 
